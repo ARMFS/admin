@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARMFS Schema Builder</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f4f5f7;--surface:#fff;--panel:#f9fafb;
+  --border:#e2e5eb;--border2:#d0d5de;
+  --text:#1a1d27;--sub:#5a6070;--muted:#9aa0b0;
+  --accent:#3b6fe8;--accent-l:#eff4ff;
+  --green:#2e9e68;--green-l:#edfaf3;
+  --amber:#c47d1a;--amber-l:#fff8ee;
+  --red:#d04545;--red-l:#fff0f0;
+  --purple:#6b4cc8;--purple-l:#f3f0ff;
+}
+html,body{height:100vh;background:var(--bg);color:var(--text);
+  font-family:'IBM Plex Sans',sans-serif;font-size:13px;overflow:hidden}
+
+/* ── Layout ── */
+.app{display:flex;flex-direction:column;height:100vh}
+
+/* Topbar */
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);
+  padding:10px 20px;display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;gap:12px}
+.topbar-left{display:flex;align-items:center;gap:14px}
+.logo{font-family:'IBM Plex Mono',monospace;font-size:0.82rem;font-weight:600;
+  color:var(--accent);letter-spacing:0.06em}
+.version{font-size:0.68rem;color:var(--muted);background:var(--bg);
+  border:1px solid var(--border);border-radius:20px;padding:2px 8px}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.btn{font-family:'IBM Plex Sans',sans-serif;cursor:pointer;border-radius:4px;
+  font-size:0.78rem;font-weight:500;transition:all 0.14s;padding:7px 14px;
+  border:1px solid transparent;white-space:nowrap}
+.btn-outline{background:var(--surface);border-color:var(--border2);color:var(--sub)}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent)}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{opacity:0.88}
+.btn-green{background:var(--green);color:#fff;border-color:var(--green)}
+.btn-green:hover{opacity:0.88}
+.btn-sm{padding:5px 10px;font-size:0.72rem}
+.btn-icon{padding:6px 8px;font-size:0.9rem;line-height:1}
+
+/* Toolbar */
+.toolbar{background:var(--panel);border-bottom:1px solid var(--border);
+  padding:8px 20px;display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap}
+.toolbar-sep{width:1px;height:22px;background:var(--border);margin:0 4px}
+.section-pills{display:flex;gap:5px;flex-wrap:wrap}
+.pill{font-size:0.72rem;padding:4px 11px;border-radius:20px;cursor:pointer;
+  border:1px solid var(--border);background:var(--surface);color:var(--sub);
+  font-family:'IBM Plex Mono',monospace;transition:all 0.12s;white-space:nowrap}
+.pill:hover{border-color:var(--accent);color:var(--accent)}
+.pill.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.pill-count{opacity:0.7;margin-left:3px;font-size:0.65rem}
+
+/* Stats row */
+.stats{background:var(--surface);border-bottom:1px solid var(--border);
+  padding:6px 20px;display:flex;align-items:center;gap:20px;flex-shrink:0}
+.stat{font-size:0.7rem;color:var(--muted)}
+.stat strong{color:var(--text);font-weight:600}
+
+/* Main table area */
+.table-wrap{flex:1;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:0.76rem}
+thead{position:sticky;top:0;z-index:10}
+thead th{background:#eef1f7;border-bottom:2px solid var(--border2);
+  padding:8px 10px;text-align:left;font-family:'IBM Plex Mono',monospace;
+  font-size:0.63rem;font-weight:600;letter-spacing:0.08em;color:var(--sub);
+  white-space:nowrap;user-select:none}
+thead th.sort-asc::after{content:' ↑'}
+thead th.sort-desc::after{content:' ↓'}
+tbody tr{border-bottom:1px solid var(--border);transition:background 0.08s}
+tbody tr:hover{background:#f7f9ff}
+tbody tr.selected{background:#eff4ff}
+tbody tr.row-sub td:first-child{padding-left:28px}
+tbody td{padding:6px 10px;vertical-align:middle;max-width:220px}
+.td-actions{width:64px;white-space:nowrap}
+
+/* Cell types */
+.cell-id{font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:var(--accent);
+  font-weight:500;cursor:pointer}
+.cell-ref{font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:var(--purple)}
+.cell-label{color:var(--text);font-size:0.78rem;max-width:280px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cell-sub{color:var(--muted);font-size:0.68rem;padding-left:14px;font-style:italic}
+.cell-pdf{font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--sub)}
+
+/* Type badges */
+.type-badge{display:inline-block;padding:2px 7px;border-radius:3px;
+  font-family:'IBM Plex Mono',monospace;font-size:0.65rem;font-weight:600;
+  letter-spacing:0.04em;white-space:nowrap}
+.t-yes_no{background:#edfaf3;color:#2e9e68;border:1px solid #b6ead0}
+.t-text{background:#f3f0ff;color:#6b4cc8;border:1px solid #ccc4f0}
+.t-select{background:#fff8ee;color:#c47d1a;border:1px solid #f0d8a0}
+.t-multi_select{background:#fff3e0;color:#b85f00;border:1px solid #f0c080}
+.t-date{background:#e8f4ff;color:#1a6ab8;border:1px solid #a8cef0}
+.t-number{background:#fff0f0;color:#d04545;border:1px solid #f0b8b8}
+.t-loop{background:#f0f8ff;color:#1a6ab8;border:1px solid #90c4f0;font-weight:700}
+
+/* Drag handle */
+.drag-handle{cursor:grab;color:var(--muted);font-size:0.9rem;padding:0 4px;
+  user-select:none;line-height:1}
+.drag-handle:active{cursor:grabbing}
+tr.drag-over td{border-top:2px solid var(--accent)}
+tr.dragging{opacity:0.4}
+
+/* Trigger badge */
+.trigger-badge{display:inline-flex;align-items:center;gap:4px;font-size:0.66rem;
+  color:var(--amber);background:var(--amber-l);border:1px solid #f0d090;
+  border-radius:3px;padding:1px 6px;font-family:'IBM Plex Mono',monospace}
+
+/* Required dot */
+.req-dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.req-yes{background:var(--accent)}
+.req-no{background:var(--border2)}
+
+/* ── Modal ── */
+.modal-bg{position:fixed;inset:0;background:rgba(10,15,30,0.45);
+  z-index:100;display:flex;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;transition:opacity 0.2s}
+.modal-bg.open{opacity:1;pointer-events:all}
+.modal{background:var(--surface);border-radius:6px;width:620px;max-width:95vw;
+  max-height:90vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,0.18);
+  border:1px solid var(--border)}
+.modal-header{padding:18px 22px 14px;border-bottom:1px solid var(--border);
+  display:flex;justify-content:space-between;align-items:center}
+.modal-title{font-weight:600;font-size:0.95rem;color:var(--text)}
+.modal-close{background:none;border:none;cursor:pointer;font-size:1.2rem;
+  color:var(--muted);line-height:1;padding:2px 6px}
+.modal-close:hover{color:var(--red)}
+.modal-body{padding:20px 22px}
+.modal-footer{padding:14px 22px;border-top:1px solid var(--border);
+  display:flex;justify-content:flex-end;gap:8px}
+
+/* Form fields in modal */
+.form-row{margin-bottom:14px}
+.form-row label{display:block;font-size:0.68rem;font-weight:600;
+  letter-spacing:0.08em;color:var(--muted);text-transform:uppercase;margin-bottom:5px}
+.form-row input,.form-row select,.form-row textarea{
+  width:100%;border:1px solid var(--border2);border-radius:4px;
+  padding:8px 10px;font-size:0.82rem;font-family:'IBM Plex Sans',sans-serif;
+  color:var(--text);background:var(--surface);outline:none;
+  transition:border-color 0.14s,box-shadow 0.14s}
+.form-row input:focus,.form-row select:focus,.form-row textarea:focus{
+  border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,111,232,0.1)}
+.form-row textarea{resize:vertical;min-height:60px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.form-hint{font-size:0.68rem;color:var(--muted);margin-top:4px;
+  font-family:'IBM Plex Mono',monospace}
+
+/* Section header row */
+.sec-header-row td{background:#f0f4ff;font-family:'IBM Plex Mono',monospace;
+  font-size:0.7rem;font-weight:600;color:var(--accent);letter-spacing:0.08em;
+  padding:7px 10px;border-bottom:1px solid #d0dcf8;position:sticky;top:37px}
+
+/* Export modal */
+.export-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px}
+.export-tab{padding:8px 16px;cursor:pointer;font-size:0.78rem;color:var(--sub);
+  border-bottom:2px solid transparent;margin-bottom:-1px;transition:all 0.12s}
+.export-tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:500}
+.code-block{background:#1a1d27;border-radius:4px;padding:14px;
+  font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:#7ec88a;
+  overflow:auto;max-height:380px;white-space:pre;line-height:1.5}
+
+/* Empty state */
+.empty-state{text-align:center;padding:48px;color:var(--muted)}
+.empty-state p{font-size:0.85rem}
+
+/* Search */
+.search-input{border:1px solid var(--border2);border-radius:4px;
+  padding:5px 10px;font-size:0.78rem;font-family:'IBM Plex Sans',sans-serif;
+  outline:none;color:var(--text);background:var(--surface);width:200px;
+  transition:border-color 0.14s}
+.search-input:focus{border-color:var(--accent)}
+.search-input::placeholder{color:var(--muted)}
+
+.tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:0.65rem;
+  font-family:'IBM Plex Mono',monospace}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="logo">ARMFS SCHEMA</span>
+      <span class="version">Sun Life 2026</span>
+    </div>
+    <div class="topbar-right">
+      <input class="search-input" id="search" placeholder="Search fields…" oninput="renderTable()">
+      <div class="toolbar-sep"></div>
+      <button class="btn btn-outline" onclick="addField()">+ Add Field</button>
+      <button class="btn btn-outline" onclick="openExport('csv')">Export CSV</button>
+      <button class="btn btn-outline" onclick="openExport('json')">Export JSON</button>
+      <button class="btn btn-green" onclick="openExport('sheets')">Open in Sheets ↗</button>
+    </div>
+  </div>
+
+  <!-- Section filter pills -->
+  <div class="toolbar">
+    <span style="font-size:0.7rem;color:var(--muted);font-weight:500;margin-right:2px">SECTION</span>
+    <div class="section-pills" id="pills"></div>
+    <div class="toolbar-sep"></div>
+    <span style="font-size:0.7rem;color:var(--muted)">TYPE</span>
+    <select id="filter-type" onchange="renderTable()"
+      style="border:1px solid var(--border2);border-radius:4px;padding:4px 8px;
+             font-size:0.72rem;color:var(--sub);background:var(--surface);outline:none">
+      <option value="">All</option>
+      <option>yes_no</option><option>text</option><option>select</option>
+      <option>multi_select</option><option>date</option><option>number</option>
+      <option>loop</option>
+    </select>
+    <select id="filter-req" onchange="renderTable()"
+      style="border:1px solid var(--border2);border-radius:4px;padding:4px 8px;
+             font-size:0.72rem;color:var(--sub);background:var(--surface);outline:none">
+      <option value="">Required: All</option>
+      <option value="yes">Required only</option>
+      <option value="no">Optional only</option>
+    </select>
+    <div class="toolbar-sep"></div>
+    <button class="btn btn-outline btn-sm" onclick="expandAll()">Expand All</button>
+    <button class="btn btn-outline btn-sm" onclick="collapseAll()">Collapse All</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats" id="stats"></div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <table id="schema-table">
+      <thead>
+        <tr>
+          <th style="width:28px"><input type="checkbox" id="sel-all" onchange="toggleAll(this)"></th>
+          <th style="width:32px;color:var(--muted)" title="Drag to reorder">⠿</th>
+          <th style="width:40px;cursor:pointer" onclick="sortByOrder()" title="Sort by order">#</th>
+          <th onclick="sortBy('id')" style="cursor:pointer">Field ID</th>
+          <th onclick="sortBy('ref')" style="cursor:pointer">SL Ref</th>
+          <th>Label / Question</th>
+          <th>Type</th>
+          <th>Options / Loop Fields</th>
+          <th>PDF Field Name</th>
+          <th>Trigger</th>
+          <th>Req</th>
+          <th class="td-actions">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Edit/Add Modal -->
+<div class="modal-bg" id="modal-edit">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Edit Field</div>
+      <button class="modal-close" onclick="closeModal('modal-edit')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-row">
+          <label>Field ID *</label>
+          <input id="f-id" placeholder="e.g. 9.1_tobacco_last_used">
+          <div class="form-hint">section.num_snake_case</div>
+        </div>
+        <div class="form-row">
+          <label>SL Field Reference *</label>
+          <input id="f-ref" placeholder="e.g. [9.1]">
+          <div class="form-hint">Exact bracket ref from form</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Label / Question *</label>
+        <input id="f-label" placeholder="What the question asks">
+      </div>
+      <div class="form-grid-3">
+        <div class="form-row">
+          <label>Section</label>
+          <select id="f-section">
+            <option value="1">1 · Insured Person</option>
+            <option value="2">2 · Owner Info</option>
+            <option value="7">7 · Policy Payment</option>
+            <option value="8">8 · Insurance & Employment</option>
+            <option value="9">9 · Lifestyle</option>
+            <option value="10">10 · Medical</option>
+            <option value="11">11 · Family History</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Type *</label>
+          <select id="f-type" onchange="typeChanged()">
+            <option>yes_no</option><option>text</option><option>select</option>
+            <option>multi_select</option><option>date</option><option>number</option>
+            <option>loop</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Required</label>
+          <select id="f-required">
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+            <option value="conditional">Conditional</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row" id="f-options-row">
+        <label>Options (pipe-separated)</label>
+        <input id="f-options" placeholder="e.g. Never|This Week|Last 12 Months|1-5 Years Ago|>5 Years Ago">
+        <div class="form-hint">Use | to separate. Leave empty for yes_no (auto Yes|No).</div>
+      </div>
+      <div class="form-row" id="f-loop-row" style="display:none">
+        <label>Loop Fields (one per line: field_id · type · label)</label>
+        <textarea id="f-loop-fields" rows="5"
+          placeholder="condition · text · Condition name&#10;onset_age · number · Age at onset&#10;current_age · text · Age if living / age at death"></textarea>
+        <div class="form-hint">Each repeated record will collect these sub-fields. Format: id · type · label</div>
+      </div>
+      <div class="form-row">
+        <label>PDF Field Name</label>
+        <input id="f-pdf" placeholder="Exact field name from Acrobat (e.g. topmostSubform[0].Page1[0].chkTobacco[0])">
+        <div class="form-hint">Open PDF in Acrobat → Tools → Prepare Form to find field names</div>
+      </div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label>Trigger Field ID</label>
+          <input id="f-trigger-field" placeholder="e.g. 9.1_tobacco_last_used">
+          <div class="form-hint">Which field triggers this one</div>
+        </div>
+        <div class="form-row">
+          <label>Trigger Value</label>
+          <input id="f-trigger-value" placeholder="e.g. Yes  or  !Never">
+          <div class="form-hint">! prefix means "anything except"</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Notes (for AI extractor)</label>
+        <textarea id="f-notes" placeholder="Additional context, validation rules, or edge cases the AI should know about…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-edit')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveField()">Save Field</button>
+    </div>
+  </div>
+</div>
+
+<!-- Export Modal -->
+<div class="modal-bg" id="modal-export">
+  <div class="modal" style="width:740px">
+    <div class="modal-header">
+      <div class="modal-title">Export Schema</div>
+      <button class="modal-close" onclick="closeModal('modal-export')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="export-tabs">
+        <div class="export-tab active" onclick="switchExportTab('json',this)">JSON</div>
+        <div class="export-tab" onclick="switchExportTab('csv',this)">CSV (Google Sheets)</div>
+        <div class="export-tab" onclick="switchExportTab('prompt',this)">AI Extraction Prompt</div>
+        <div class="export-tab" onclick="switchExportTab('apps',this)">Apps Script</div>
+      </div>
+      <div id="export-content">
+        <div class="code-block" id="export-code"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-export')">Close</button>
+      <button class="btn btn-primary" onclick="copyExport()">Copy to Clipboard</button>
+      <button class="btn btn-green" id="btn-download" onclick="downloadExport()">⬇ Download</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════
+// DATA — Full ARMFS Schema
+// ════════════════════════════════════
+let schema = [
+  // ── SECTION 1: INSURED PERSON ──
+  {id:"2.1_title",ref:"[2.1]",sec:1,label:"Title",type:"select",options:"Mr.|Mrs.|Miss|Ms.|Dr.",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"2.1_first_name",ref:"[2.1]",sec:1,label:"First Name",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"2.1_middle_initial",ref:"[2.1]",sec:1,label:"Middle Initial",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"no",notes:""},
+  {id:"2.1_last_name",ref:"[2.1]",sec:1,label:"Last Name",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"2.1_former_last_name",ref:"[2.1]",sec:1,label:"Former Last Name",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"no",notes:""},
+  {id:"2.1_sex",ref:"[2.1]",sec:1,label:"Sex",type:"select",options:"Male|Female",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"2.1_dob",ref:"[2.1]",sec:1,label:"Date of Birth",type:"date",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"Format dd-mm-yyyy"},
+  {id:"2.1_relationship_to_owner",ref:"[2.1]",sec:1,label:"Relationship to Owner",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"e.g. Self, Spouse, Child"},
+  {id:"2.1_sin",ref:"[2.1]",sec:1,label:"Social Insurance Number",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:"Required for universal/permanent policies"},
+  {id:"2.1_phone_home",ref:"[2.1]",sec:1,label:"Phone (Home)",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"no",notes:""},
+  {id:"2.1_phone_cell",ref:"[2.1]",sec:1,label:"Phone (Cell)",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"no",notes:""},
+  {id:"2.1_phone_work",ref:"[2.1]",sec:1,label:"Phone (Work)",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"no",notes:""},
+  {id:"2.1_phone_ext",ref:"[2.1]",sec:1,label:"Phone Extension",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"no",notes:""},
+  {id:"2.1_address_street",ref:"[2.1]",sec:1,label:"Street Address",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"2.1_address_apt",ref:"[2.1]",sec:1,label:"Apt / Suite",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"no",notes:""},
+  {id:"2.1_address_city",ref:"[2.1]",sec:1,label:"City",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"2.1_address_province",ref:"[2.1]",sec:1,label:"Province",type:"select",options:"AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"2.1_address_postal",ref:"[2.1]",sec:1,label:"Postal Code",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"2.1_address_country",ref:"[2.1]",sec:1,label:"Country",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"Default Canada"},
+  {id:"2.1_id_type",ref:"[2.1]",sec:1,label:"ID Document Type",type:"select",options:"Driver's License|Passport|Provincial ID|Other",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"Photo ID required"},
+  {id:"2.1_id_number",ref:"[2.1]",sec:1,label:"ID Document Number",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"2.1_id_expiry",ref:"[2.1]",sec:1,label:"ID Expiry Date",type:"date",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"dd-mm-yyyy"},
+  {id:"2.1_id_province",ref:"[2.1]",sec:1,label:"ID Province of Issue",type:"select",options:"AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT|Other",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"2.1_id_country",ref:"[2.1]",sec:1,label:"ID Country of Issue",type:"select",options:"Canada|USA|Other",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"2.1_id_verification_date",ref:"[2.1]",sec:1,label:"Date of ID Verification",type:"date",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"dd-mm-yyyy"},
+  {id:"2.2_birth_country",ref:"[2.2]",sec:1,label:"Country of Birth",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"2.2_birth_city",ref:"[2.2]",sec:1,label:"City of Birth",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"2.3_citizenship",ref:"[2.3]",sec:1,label:"Citizenship Status",type:"select",options:"Canadian Citizen|Permanent Resident|Other",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"2.4_arrival_date",ref:"[2.4]",sec:1,label:"Date Arrived in Canada",type:"date",options:"",pdf:"",trigger_field:"2.3_citizenship",trigger_val:"Other",required:"conditional",notes:"Required if not born in Canada"},
+  {id:"2.5_applied_pr",ref:"[2.5]",sec:1,label:"Applied for Permanent Residency?",type:"yes_no",options:"",pdf:"",trigger_field:"2.3_citizenship",trigger_val:"Other",required:"conditional",notes:""},
+  {id:"2.5_pr_reason",ref:"[2.5]",sec:1,label:"Reason Not Applied for PR",type:"text",options:"",pdf:"",trigger_field:"2.5_applied_pr",trigger_val:"No",required:"conditional",notes:""},
+  {id:"2.5_has_visa",ref:"[2.5]",sec:1,label:"Valid Temporary Visa?",type:"yes_no",options:"",pdf:"",trigger_field:"2.3_citizenship",trigger_val:"Other",required:"conditional",notes:""},
+  {id:"2.5_visa_type",ref:"[2.5]",sec:1,label:"Visa Type",type:"text",options:"",pdf:"",trigger_field:"2.5_has_visa",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"2.5_visa_expiry",ref:"[2.5]",sec:1,label:"Visa Expiry Date",type:"date",options:"",pdf:"",trigger_field:"2.5_has_visa",trigger_val:"Yes",required:"conditional",notes:"dd-mm-yyyy"},
+  {id:"2.5_refugee",ref:"[2.5]",sec:1,label:"Refugee Status?",type:"yes_no",options:"",pdf:"",trigger_field:"2.3_citizenship",trigger_val:"Other",required:"conditional",notes:""},
+  {id:"2.6_us_person",ref:"[2.6]",sec:1,label:"US Citizen or Tax Resident? (FATCA)",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"2.6_us_tin",ref:"[2.6]",sec:1,label:"US Taxpayer ID Number (TIN)",type:"text",options:"",pdf:"",trigger_field:"2.6_us_person",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"2.7_other_tax_resident",ref:"[2.7]",sec:1,label:"Tax Resident of Other Jurisdiction? (CRS)",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"2.7_crs_jurisdiction",ref:"[2.7]",sec:1,label:"CRS Jurisdiction",type:"text",options:"",pdf:"",trigger_field:"2.7_other_tax_resident",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"2.7_crs_tin",ref:"[2.7]",sec:1,label:"CRS TIN or Reason if None",type:"text",options:"",pdf:"",trigger_field:"2.7_other_tax_resident",trigger_val:"Yes",required:"conditional",notes:""},
+
+  // ── SECTION 2: OWNER ──
+  {id:"3c_entity_name",ref:"[3c]",sec:2,label:"Entity / Corporation Name",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:"Corporate owner only"},
+  {id:"3c_entity_contact_title",ref:"[3c]",sec:2,label:"Title of Person to Receive Notices",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:""},
+  {id:"3c_entity_street",ref:"[3c]",sec:2,label:"Entity Street Address",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:""},
+  {id:"3c_entity_city",ref:"[3c]",sec:2,label:"Entity City",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:""},
+  {id:"3c_entity_province",ref:"[3c]",sec:2,label:"Entity Province",type:"select",options:"AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:""},
+  {id:"3c_entity_postal",ref:"[3c]",sec:2,label:"Entity Postal Code",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:""},
+  {id:"3c_entity_country",ref:"[3c]",sec:2,label:"Entity Country",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:""},
+  {id:"3c_annual_sales",ref:"[3c]",sec:2,label:"Annual Sales ($)",type:"number",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:""},
+  {id:"3c_net_income",ref:"[3c]",sec:2,label:"Net After-Tax Income ($)",type:"number",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:""},
+  {id:"3c_fmv",ref:"[3c]",sec:2,label:"Fair Market Value ($)",type:"number",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:""},
+  {id:"1.6c_biz_owner_name",ref:"[1.6c]",sec:2,label:"Business Owner Name(s)",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:"Repeat until 100% ownership"},
+  {id:"1.6c_biz_name",ref:"[1.6c]",sec:2,label:"Name of the Business",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:""},
+  {id:"1.6c_biz_pct_owned",ref:"[1.6c]",sec:2,label:"% of Business Owned",type:"number",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:"Total must reach 100%"},
+  {id:"1.6c_biz_ins_force",ref:"[1.6c]",sec:2,label:"Total Business Insurance In Force ($)",type:"number",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:""},
+  {id:"1.6c_biz_ins_pending",ref:"[1.6c]",sec:2,label:"Total New Business Insurance Pending ($)",type:"number",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:""},
+
+  // ── SECTION 7: PAYING ──
+  {id:"7.2d_collateral_assign",ref:"[7.2d]",sec:7,label:"Planning to assign policy as collateral in next 2 years?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"7.2d_lender_name",ref:"[7.2d]",sec:7,label:"Lender Name",type:"text",options:"",pdf:"",trigger_field:"7.2d_collateral_assign",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"7.2d_collateral_type",ref:"[7.2d]",sec:7,label:"Collateral Used",type:"text",options:"",pdf:"",trigger_field:"7.2d_collateral_assign",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"7.2d_loan_purpose",ref:"[7.2d]",sec:7,label:"Plan to Use Loan",type:"select",options:"Pay Premiums|Fund Investments|Business Re-investment|Other",pdf:"",trigger_field:"7.2d_collateral_assign",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"7.3_backdate",ref:"[7.3]",sec:7,label:"Save Age by Backdating?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"7.6_ul_frequency",ref:"[7.6]",sec:7,label:"UL Payment Frequency",type:"select",options:"Monthly|Annual",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:"Universal Life only"},
+  {id:"7.6_ul_amount",ref:"[7.6]",sec:7,label:"UL Payment Amount ($)",type:"number",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:"Universal Life only"},
+
+  // ── SECTION 8: INSURANCE & EMPLOYMENT ──
+  {id:"8.1a_existing_ins",ref:"[8.1a]",sec:8,label:"Existing Life/CI Insurance In Force?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"8.1a_ins_type",ref:"[8.1a]",sec:8,label:"Insurance Type",type:"select",options:"Business Life|Personal Life|Business CI|Personal CI",pdf:"",trigger_field:"8.1a_existing_ins",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"8.1a_ins_amount",ref:"[8.1a]",sec:8,label:"Insurance Amount ($)",type:"number",options:"",pdf:"",trigger_field:"8.1a_existing_ins",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"8.1a_ins_date_issued",ref:"[8.1a]",sec:8,label:"Date Issued",type:"date",options:"",pdf:"",trigger_field:"8.1a_existing_ins",trigger_val:"Yes",required:"conditional",notes:"mm-yyyy"},
+  {id:"8.1a_ins_company",ref:"[8.1a]",sec:8,label:"Insurance Company",type:"text",options:"",pdf:"",trigger_field:"8.1a_existing_ins",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"8.1a_ins_replace",ref:"[8.1a]",sec:8,label:"Replacing This Policy?",type:"yes_no",options:"",pdf:"",trigger_field:"8.1a_existing_ins",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"8.1b_pending_ins",ref:"[8.1b]",sec:8,label:"Applications Currently Pending?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"8.1b_pending_companies",ref:"[8.1b]",sec:8,label:"Pending Companies",type:"text",options:"",pdf:"",trigger_field:"8.1b_pending_ins",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"8.1b_pending_type",ref:"[8.1b]",sec:8,label:"Pending Type",type:"text",options:"",pdf:"",trigger_field:"8.1b_pending_ins",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"8.1b_pending_amount",ref:"[8.1b]",sec:8,label:"Pending Total Amount ($)",type:"number",options:"",pdf:"",trigger_field:"8.1b_pending_ins",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"8.1c_ever_declined",ref:"[8.1c]",sec:8,label:"Ever Declined, Rated, Postponed, or Cancelled?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"8.1c_declined_when",ref:"[8.1c]",sec:8,label:"When Declined",type:"text",options:"",pdf:"",trigger_field:"8.1c_ever_declined",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"8.1c_declined_company",ref:"[8.1c]",sec:8,label:"Declining Company",type:"text",options:"",pdf:"",trigger_field:"8.1c_ever_declined",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"8.1c_declined_reason",ref:"[8.1c]",sec:8,label:"Reason for Decline",type:"text",options:"",pdf:"",trigger_field:"8.1c_ever_declined",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"8.2a_employment_status",ref:"[8.2a]",sec:8,label:"Employment Status",type:"select",options:"Employed|Self-Employed|Retired|Houseperson|Student|Unemployed|Maternity/Paternity|Disability",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"8.2b_occupation",ref:"[8.2b]",sec:8,label:"Detailed Occupation",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"Be specific — e.g. 'Commercial Airline Pilot' not just 'Pilot'"},
+  {id:"8.2b_employer_name",ref:"[8.2b]",sec:8,label:"Employer Name",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:""},
+  {id:"8.2b_employer_address",ref:"[8.2b]",sec:8,label:"Employer Address",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:""},
+  {id:"8.3_annual_earned",ref:"[8.3]",sec:8,label:"Annual Earned Income ($)",type:"number",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"8.3_annual_unearned",ref:"[8.3]",sec:8,label:"Annual Unearned Income ($)",type:"number",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"Rental, investment, etc."},
+  {id:"8.3_cdn_net_worth",ref:"[8.3]",sec:8,label:"Personal Canadian Net Worth ($)",type:"number",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"8.3_foreign_net_worth",ref:"[8.3]",sec:8,label:"Personal Foreign Net Worth ($)",type:"number",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"Enter 0 if none"},
+  {id:"8.3_bankruptcy",ref:"[8.3]",sec:8,label:"Bankruptcy or Petition in Last 5 Years?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"8.3_bankruptcy_date",ref:"[8.3]",sec:8,label:"Bankruptcy Discharge Date",type:"date",options:"",pdf:"",trigger_field:"8.3_bankruptcy",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"8.3_bankruptcy_circumstances",ref:"[8.3]",sec:8,label:"Bankruptcy Circumstances",type:"text",options:"",pdf:"",trigger_field:"8.3_bankruptcy",trigger_val:"Yes",required:"conditional",notes:""},
+
+  // ── SECTION 9: LIFESTYLE ──
+  {id:"9.1_tobacco_last_used",ref:"[9.1]",sec:9,label:"Last Used Tobacco?",type:"select",options:"Never|This Week|Last 12 Months|1-5 Years Ago|>5 Years Ago",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"Critical for smoker/non-smoker rating"},
+  {id:"9.1_tobacco_product",ref:"[9.1]",sec:9,label:"Tobacco Product Type",type:"select",options:"Cigarettes/Pipes|Large Cigars|Vaping|Other",pdf:"",trigger_field:"9.1_tobacco_last_used",trigger_val:"!Never",required:"conditional",notes:""},
+  {id:"9.1_tobacco_date_last",ref:"[9.1]",sec:9,label:"Date Last Used Tobacco",type:"date",options:"",pdf:"",trigger_field:"9.1_tobacco_last_used",trigger_val:"!Never",required:"conditional",notes:"Approximate is fine"},
+  {id:"9.1_cigar_amount",ref:"[9.1]",sec:9,label:"Cigars Per Week/Month",type:"text",options:"",pdf:"",trigger_field:"9.1_tobacco_product",trigger_val:"Large Cigars",required:"conditional",notes:""},
+  {id:"9.2a_drinks_alcohol",ref:"[9.2a]",sec:9,label:"Drink Alcohol?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"9.2a_beer_weekly",ref:"[9.2a]",sec:9,label:"Beer (per week, bottles/cans)",type:"number",options:"",pdf:"",trigger_field:"9.2a_drinks_alcohol",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"9.2a_wine_weekly",ref:"[9.2a]",sec:9,label:"Wine (per week, glasses)",type:"number",options:"",pdf:"",trigger_field:"9.2a_drinks_alcohol",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"9.2a_liquor_weekly",ref:"[9.2a]",sec:9,label:"Liquor (per week, oz)",type:"number",options:"",pdf:"",trigger_field:"9.2a_drinks_alcohol",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"9.2b_marijuana",ref:"[9.2b]",sec:9,label:"Marijuana in Last 5 Years?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"9.2b_marijuana_freq",ref:"[9.2b]",sec:9,label:"Marijuana Frequency",type:"select",options:"Daily|Weekly|Monthly",pdf:"",trigger_field:"9.2b_marijuana",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"9.2b_marijuana_grams",ref:"[9.2b]",sec:9,label:"Grams Per Use",type:"text",options:"",pdf:"",trigger_field:"9.2b_marijuana",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"9.2b_marijuana_last_used",ref:"[9.2b]",sec:9,label:"Marijuana Date Last Used",type:"date",options:"",pdf:"",trigger_field:"9.2b_marijuana",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"9.2b_marijuana_tobacco_mix",ref:"[9.2b]",sec:9,label:"Mixed with Tobacco?",type:"yes_no",options:"",pdf:"",trigger_field:"9.2b_marijuana",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"9.2b_marijuana_medicinal",ref:"[9.2b]",sec:9,label:"Medicinal Marijuana?",type:"yes_no",options:"",pdf:"",trigger_field:"9.2b_marijuana",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"9.2b_marijuana_prescribed",ref:"[9.2b]",sec:9,label:"Prescribed by Doctor?",type:"yes_no",options:"",pdf:"",trigger_field:"9.2b_marijuana_medicinal",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"9.2b_marijuana_doctor",ref:"[9.2b]",sec:9,label:"Prescribing Doctor Name/Address",type:"text",options:"",pdf:"",trigger_field:"9.2b_marijuana_prescribed",trigger_val:"No",required:"conditional",notes:"If not usual doctor"},
+  {id:"9.2b_marijuana_condition",ref:"[9.2b]",sec:9,label:"Condition Being Treated",type:"text",options:"",pdf:"",trigger_field:"9.2b_marijuana_medicinal",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"9.2g_hard_drugs",ref:"[9.2g]",sec:9,label:"Unprescribed Drugs in Last 10 Years?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"Cocaine, opioids, stimulants, etc."},
+  {id:"9.2g_drug_type",ref:"[9.2g]",sec:9,label:"Drug Type(s)",type:"text",options:"",pdf:"",trigger_field:"9.2g_hard_drugs",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"9.2g_drug_freq",ref:"[9.2g]",sec:9,label:"Drug Amount / Frequency",type:"text",options:"",pdf:"",trigger_field:"9.2g_hard_drugs",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"9.2g_drug_last_used",ref:"[9.2g]",sec:9,label:"Drug Date Last Used",type:"date",options:"",pdf:"",trigger_field:"9.2g_hard_drugs",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"9.2h_substance_treatment",ref:"[9.2h]",sec:9,label:"Ever Treated/Counselled for Substance Abuse?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"Or advised by doctor to reduce use"},
+  {id:"9.3_travel",ref:"[9.3]",sec:9,label:"Travelling Outside Canada in Next 12 Months?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"9.3_travel_destinations",ref:"[9.3]",sec:9,label:"Travel Destinations (Cities/Countries)",type:"text",options:"",pdf:"",trigger_field:"9.3_travel",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"9.3_travel_duration",ref:"[9.3]",sec:9,label:"Length of Stay",type:"text",options:"",pdf:"",trigger_field:"9.3_travel",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"9.3_travel_dates",ref:"[9.3]",sec:9,label:"Travel Dates",type:"text",options:"",pdf:"",trigger_field:"9.3_travel",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"9.3_travel_reason",ref:"[9.3]",sec:9,label:"Travel Reason",type:"select",options:"Tourism|Business|Volunteer|Medical|Other",pdf:"",trigger_field:"9.3_travel",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"9.4_dui",ref:"[9.4]",sec:9,label:"DUI Offence in Last 10 Years?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"Alcohol or drug driving offence"},
+  {id:"9.4_dui_details",ref:"[9.4]",sec:9,label:"DUI Details",type:"text",options:"",pdf:"",trigger_field:"9.4_dui",trigger_val:"Yes",required:"conditional",notes:"Date, type"},
+  {id:"9.4_driving_offences",ref:"[9.4]",sec:9,label:"Other Driving Offences in Last 3 Years?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"9.4_driving_offence_details",ref:"[9.4]",sec:9,label:"Driving Offence Details",type:"text",options:"",pdf:"",trigger_field:"9.4_driving_offences",trigger_val:"Yes",required:"conditional",notes:"Speed over limit if applicable"},
+  {id:"9.5_aviation",ref:"[9.5]",sec:9,label:"Pilot / Crew / Flight Attendant in Last 12 Months?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"Aviation questionnaire may be required"},
+  {id:"9.5_hazardous",ref:"[9.5]",sec:9,label:"Hazardous Activities in Last 12 Months?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"Motorized racing, diving, climbing, skydiving, backcountry skiing"},
+  {id:"9.6_criminal",ref:"[9.6]",sec:9,label:"Criminal Charge / Conviction in Last 10 Years?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"9.6_criminal_details",ref:"[9.6]",sec:9,label:"Criminal Details",type:"text",options:"",pdf:"",trigger_field:"9.6_criminal",trigger_val:"Yes",required:"conditional",notes:"Dates and details"},
+
+  // ── SECTION 10: MEDICAL ──
+  {id:"10.1_doctor_type",ref:"[10.1]",sec:10,label:"Doctor Type",type:"select",options:"Family Doctor|Nurse Practitioner|Walk-In Clinic|Other",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.1_doctor_name",ref:"[10.1]",sec:10,label:"Doctor Name",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.1_doctor_address",ref:"[10.1]",sec:10,label:"Doctor Address",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.1_doctor_first_visit",ref:"[10.1]",sec:10,label:"Date of First Visit",type:"date",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"mm-yyyy"},
+  {id:"10.1_doctor_last_visit",ref:"[10.1]",sec:10,label:"Date of Last Visit",type:"date",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"mm-yyyy"},
+  {id:"10.1_doctor_reason",ref:"[10.1]",sec:10,label:"Reason for Last Visit",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.1_doctor_treatment",ref:"[10.1]",sec:10,label:"Current Treatment / Medications",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.2_height",ref:"[10.2]",sec:10,label:"Height",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"Accept ft/in or cm"},
+  {id:"10.2_weight",ref:"[10.2]",sec:10,label:"Weight",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"Accept lb or kg"},
+  {id:"10.2_weight_loss",ref:"[10.2]",sec:10,label:"Lost >4.5kg / 10lb in Last 12 Months?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.2_weight_loss_details",ref:"[10.2]",sec:10,label:"Weight Loss: Amount and Cause",type:"text",options:"",pdf:"",trigger_field:"10.2_weight_loss",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"10.3a_blood",ref:"[10.3a]",sec:10,label:"Blood Disorder? (Anemia, bleeding)",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.3b_cancer",ref:"[10.3b]",sec:10,label:"Cancer / Tumor / Cyst / Leukemia / Melanoma?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.3c_heart",ref:"[10.3c]",sec:10,label:"Heart / Circulatory? (High BP, chest pain, stroke, murmur)",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.3d_mental",ref:"[10.3d]",sec:10,label:"Mental Health? (Anxiety, depression, ADD, eating disorder)",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.3e_endocrine",ref:"[10.3e]",sec:10,label:"Glands / Endocrine? (Diabetes, thyroid)",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.3f_musculoskeletal",ref:"[10.3f]",sec:10,label:"Musculoskeletal? (Arthritis, MS, paralysis)",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.3g_gastrointestinal",ref:"[10.3g]",sec:10,label:"Gastrointestinal? (Hepatitis, Crohn's, ulcers)",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.3h_skin",ref:"[10.3h]",sec:10,label:"Skin? (Dysplastic nevus)",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.3i_immune",ref:"[10.3i]",sec:10,label:"Immune System? (Lupus, HIV/AIDS)",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.3j_genitourinary",ref:"[10.3j]",sec:10,label:"Genitourinary? (Prostate, abnormal pap, kidney)",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.3k_respiratory",ref:"[10.3k]",sec:10,label:"Respiratory? (Asthma, COPD, sleep apnea)",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.3l_nervous",ref:"[10.3l]",sec:10,label:"Nervous System? (Seizures, MS, Parkinson's, migraines)",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.3m_sensory",ref:"[10.3m]",sec:10,label:"Eyes / Ears / Nose / Throat? (Blindness, deafness)",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.5_condition_details",ref:"[10.5]",sec:10,label:"Medical Condition Details (for each Yes above)",type:"text",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"conditional",notes:"Name of condition, date diagnosed, treatment, medications, outcomes. Repeat for each condition."},
+  {id:"10.4a_other_tests",ref:"[10.4a]",sec:10,label:"Other Tests in Last 5 Years? (ECG, MRI, X-ray, etc.)",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.4a_test_details",ref:"[10.4a]",sec:10,label:"Test Details",type:"text",options:"",pdf:"",trigger_field:"10.4a_other_tests",trigger_val:"Yes",required:"conditional",notes:"What test, when, results"},
+  {id:"10.4b_off_work",ref:"[10.4b]",sec:10,label:"Off Work >2 Weeks in Last 5 Years?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.4b_off_work_details",ref:"[10.4b]",sec:10,label:"Off Work Details",type:"text",options:"",pdf:"",trigger_field:"10.4b_off_work",trigger_val:"Yes",required:"conditional",notes:"Reason and duration"},
+  {id:"10.4c_hospitalized",ref:"[10.4c]",sec:10,label:"Hospitalized >24 Hours in Last 5 Years?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.4c_hospital_details",ref:"[10.4c]",sec:10,label:"Hospitalization Details",type:"text",options:"",pdf:"",trigger_field:"10.4c_hospitalized",trigger_val:"Yes",required:"conditional",notes:"Reason, date, duration"},
+  {id:"10.4d_awaiting_tests",ref:"[10.4d]",sec:10,label:"Awaiting Test Results / Referral?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.4d_awaiting_details",ref:"[10.4d]",sec:10,label:"Awaiting Details",type:"text",options:"",pdf:"",trigger_field:"10.4d_awaiting_tests",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"10.4e_prescriptions",ref:"[10.4e]",sec:10,label:"Currently on Prescription Medications?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.4e_prescription_list",ref:"[10.4e]",sec:10,label:"Prescription List",type:"text",options:"",pdf:"",trigger_field:"10.4e_prescriptions",trigger_val:"Yes",required:"conditional",notes:"Name, dosage, reason for each"},
+  {id:"10.4f_pregnant",ref:"[10.4f]",sec:10,label:"Currently Pregnant?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"10.4f_trimester",ref:"[10.4f]",sec:10,label:"Trimester",type:"select",options:"1st|2nd|3rd",pdf:"",trigger_field:"10.4f_pregnant",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"10.4f_pre_preg_weight",ref:"[10.4f]",sec:10,label:"Pre-Pregnancy Weight",type:"text",options:"",pdf:"",trigger_field:"10.4f_pregnant",trigger_val:"Yes",required:"conditional",notes:""},
+  {id:"10.4g_unconsulted_symptoms",ref:"[10.4g]",sec:10,label:"Unconsulted Symptoms?",type:"yes_no",options:"",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:"Symptoms not yet seen by doctor"},
+  {id:"10.4g_symptom_details",ref:"[10.4g]",sec:10,label:"Symptom Description",type:"text",options:"",pdf:"",trigger_field:"10.4g_unconsulted_symptoms",trigger_val:"Yes",required:"conditional",notes:""},
+
+  // ── SECTION 11: FAMILY HISTORY ──
+  {id:"11.1_early_onset_status",ref:"[11.1]",sec:11,label:"Parent/Sibling Diagnosed Before 65 with Heart/Stroke/Diabetes/Cancer?",type:"select",options:"No|Yes|Unknown",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"11.1_early_onset_records",ref:"[11.1]",sec:11,label:"Early-Onset Family Members (repeat for each affected member)",type:"loop",options:"",loop_fields:"member · select · Family Member (Mother|Father|Brother|Sister)\ncondition · text · Condition name\nonset_age · number · Age at diagnosis\ncurrent_age · text · Age if living / age at death",pdf:"",trigger_field:"11.1_early_onset_status",trigger_val:"Yes",required:"conditional",notes:"Collect one record per affected family member. Repeat until all affected members are captured."},
+  {id:"11.2_hereditary_status",ref:"[11.2]",sec:11,label:"Parent/Sibling Diagnosed with Huntington's / MS / ALS / Alzheimer's?",type:"select",options:"No|Yes|Unknown",pdf:"",trigger_field:"",trigger_val:"",required:"yes",notes:""},
+  {id:"11.2_hereditary_records",ref:"[11.2]",sec:11,label:"Hereditary Family Members (repeat for each affected member)",type:"loop",options:"",loop_fields:"member · select · Family Member (Mother|Father|Brother|Sister)\ncondition · text · Condition name\nonset_age · number · Age at diagnosis\ncurrent_age · text · Age if living / age at death",pdf:"",trigger_field:"11.2_hereditary_status",trigger_val:"Yes",required:"conditional",notes:"Collect one record per affected family member."},
+];
+
+const SECTIONS = {
+  1:{name:"1 · Insured Person",color:"#3b6fe8"},
+  2:{name:"2 · Owner Info",color:"#9b4db8"},
+  7:{name:"7 · Policy Payment",color:"#c47d1a"},
+  8:{name:"8 · Insurance & Employment",color:"#2e8a9e"},
+  9:{name:"9 · Lifestyle",color:"#d04545"},
+  10:{name:"10 · Medical",color:"#2e9e68"},
+  11:{name:"11 · Family History",color:"#6b4cc8"}
+};
+
+// ════════════════════════════════════
+// STATE
+// ════════════════════════════════════
+let activeSec = null;
+let sortKey = null, sortDir = 1;
+let editIdx = null;
+let exportMode = 'json';
+let exportTab = 'json';
+
+// ════════════════════════════════════
+// RENDER
+// ════════════════════════════════════
+function renderPills(){
+  const el = document.getElementById('pills');
+  el.innerHTML = '';
+  const all = document.createElement('div');
+  all.className = `pill ${!activeSec?'active':''}`;
+  const tc = schema.length;
+  all.innerHTML = `All <span class="pill-count">${tc}</span>`;
+  all.onclick = ()=>{activeSec=null;renderAll()};
+  el.appendChild(all);
+  Object.entries(SECTIONS).forEach(([sid,sec])=>{
+    const count = schema.filter(f=>f.sec==sid).length;
+    const p = document.createElement('div');
+    p.className = `pill ${activeSec==sid?'active':''}`;
+    p.style.setProperty('--pc',sec.color);
+    p.innerHTML = `${sec.name} <span class="pill-count">${count}</span>`;
+    p.onclick = ()=>{activeSec=+sid;renderAll()};
+    if(activeSec==sid) p.style.background=sec.color, p.style.borderColor=sec.color;
+    el.appendChild(p);
+  });
+}
+
+function renderStats(){
+  const total = schema.length;
+  const withPdf = schema.filter(f=>f.pdf).length;
+  const triggers = schema.filter(f=>f.trigger_field).length;
+  const req = schema.filter(f=>f.required==='yes').length;
+  document.getElementById('stats').innerHTML = `
+    <span class="stat"><strong>${total}</strong> total fields</span>
+    <span class="stat"><strong>${req}</strong> required</span>
+    <span class="stat"><strong>${triggers}</strong> conditional</span>
+    <span class="stat" style="color:${withPdf<total?'var(--amber)':'var(--green)'}">
+      <strong>${withPdf}/${total}</strong> PDF fields mapped</span>
+    <span class="stat" style="margin-left:auto;color:var(--muted);font-style:italic">
+      ${withPdf<total?`⚠ ${total-withPdf} fields need PDF field names`:'✓ All PDF fields mapped'}</span>`;
+}
+
+function visible(){
+  const q = document.getElementById('search').value.toLowerCase();
+  const ft = document.getElementById('filter-type').value;
+  const fr = document.getElementById('filter-req').value;
+  return schema.filter((f,i)=>{
+    if(activeSec && f.sec!=activeSec) return false;
+    if(ft && f.type!==ft) return false;
+    if(fr && f.required!==fr) return false;
+    if(q && !f.id.includes(q) && !f.label.toLowerCase().includes(q) &&
+       !f.ref.toLowerCase().includes(q) && !f.pdf.toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+function renderTable(){
+  renderPills(); renderStats();
+  // Default sort by order
+  const rows = visible().sort((a,b)=>a.order-b.order);
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  if(!rows.length){
+    tbody.innerHTML = `<tr><td colspan="12" class="empty-state"><p>No fields match your filters.</p></td></tr>`;
+    return;
+  }
+  let lastSec = null;
+  rows.forEach((f,vi)=>{
+    const i = schema.indexOf(f);
+    if(f.sec!==lastSec){
+      lastSec=f.sec;
+      const hr=document.createElement('tr');
+      hr.className='sec-header-row';
+      const sec=SECTIONS[f.sec];
+      hr.innerHTML=`<td colspan="12" style="border-left:3px solid ${sec.color}">
+        ${sec.name.toUpperCase()}&nbsp;&nbsp;
+        <span style="color:var(--muted);font-size:0.62rem;font-weight:400">
+          ${schema.filter(x=>x.sec===f.sec).length} fields
+        </span></td>`;
+      tbody.appendChild(hr);
+    }
+    const isSub = !!f.trigger_field;
+    const isLoop = f.type === 'loop';
+    const optDisplay = isLoop
+      ? `<em style="color:var(--accent);font-size:0.68rem">${(f.loop_fields||'').split('\n').length} sub-fields</em>`
+      : (f.options || '—');
+    const tr=document.createElement('tr');
+    tr.className=`${isSub?'row-sub':''} ${isLoop?'row-loop':''}`;
+    tr.draggable=true;
+    tr.dataset.i=i;
+    tr.innerHTML=`
+<td><input type="checkbox" data-i="${i}" onchange="updateSel()"></td>
+<td><span class="drag-handle" title="Drag to reorder">⠿</span></td>
+<td style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--muted);text-align:center">${f.order}</td>
+<td><span class="cell-id" title="${f.id}" onclick="editField(${i})">${f.id}</span></td>
+<td><span class="cell-ref">${f.ref}</span></td>
+<td>
+  <div class="cell-label ${isSub?'cell-sub':''}" title="${f.label}">${isSub?'└ ':''}${isLoop?'↻ ':''}${f.label}</div>
+</td>
+<td><span class="type-badge t-${f.type}">${f.type}</span></td>
+<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+           color:var(--sub);font-size:0.7rem;font-family:'IBM Plex Mono',monospace" title="${f.options}">
+  ${optDisplay}
+</td>
+<td><span class="cell-pdf" title="${f.pdf}">${f.pdf||'<span style="color:var(--amber)">⚠ not set</span>'}</span></td>
+<td>${f.trigger_field?`<span class="trigger-badge">if ${f.trigger_field}<br>= ${f.trigger_val}</span>`:'—'}</td>
+<td><span class="req-dot req-${f.required==='yes'?'yes':'no'}" title="${f.required}"></span></td>
+<td class="td-actions">
+  <button class="btn btn-outline btn-icon btn-sm" onclick="moveRow(${i},-1)" title="Move up">↑</button>
+  <button class="btn btn-outline btn-icon btn-sm" onclick="moveRow(${i},1)" title="Move down">↓</button>
+  <button class="btn btn-outline btn-icon btn-sm" onclick="editField(${i})" title="Edit">✎</button>
+  <button class="btn btn-outline btn-icon btn-sm" style="color:var(--red)" onclick="deleteField(${i})" title="Delete">✕</button>
+</td>`;
+
+    // Drag events
+    tr.addEventListener('dragstart', e=>{
+      e.dataTransfer.setData('text/plain', i);
+      tr.classList.add('dragging');
+    });
+    tr.addEventListener('dragend', ()=>tr.classList.remove('dragging'));
+    tr.addEventListener('dragover', e=>{
+      e.preventDefault();
+      document.querySelectorAll('tr.drag-over').forEach(r=>r.classList.remove('drag-over'));
+      tr.classList.add('drag-over');
+    });
+    tr.addEventListener('drop', e=>{
+      e.preventDefault();
+      tr.classList.remove('drag-over');
+      const fromI = +e.dataTransfer.getData('text/plain');
+      const toI = i;
+      if(fromI===toI) return;
+      // Swap orders
+      const fromOrder = schema[fromI].order;
+      schema[fromI].order = schema[toI].order;
+      schema[toI].order = fromOrder;
+      reindexOrders();
+      renderAll();
+    });
+
+    tbody.appendChild(tr);
+  });
+}
+
+function renderAll(){renderTable();}
+
+// ════════════════════════════════════
+// SORT / SELECT
+// ════════════════════════════════════
+function sortBy(k){
+  if(sortKey===k) sortDir*=-1; else {sortKey=k;sortDir=1;}
+  schema.sort((a,b)=>String(a[k]).localeCompare(String(b[k]))*sortDir);
+  renderTable();
+}
+function toggleAll(cb){
+  document.querySelectorAll('[data-i]').forEach(c=>c.checked=cb.checked);
+}
+function updateSel(){}
+
+// ════════════════════════════════════
+// EXPAND / COLLAPSE (sub-question visibility)
+// ════════════════════════════════════
+function expandAll(){ /* all rows visible by default */ }
+function collapseAll(){ }
+
+// ════════════════════════════════════
+// ADD / EDIT / DELETE
+// ════════════════════════════════════
+function addField(){
+  editIdx=null;
+  document.getElementById('modal-title').textContent='Add Field';
+  ['f-id','f-ref','f-label','f-options','f-pdf',
+   'f-trigger-field','f-trigger-value','f-notes','f-loop-fields'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-type').value='yes_no';
+  document.getElementById('f-required').value='yes';
+  document.getElementById('f-section').value='8';
+  typeChanged();
+  openModal('modal-edit');
+}
+function editField(i){
+  editIdx=i; const f=schema[i];
+  document.getElementById('modal-title').textContent='Edit Field';
+  document.getElementById('f-id').value=f.id;
+  document.getElementById('f-ref').value=f.ref;
+  document.getElementById('f-label').value=f.label;
+  document.getElementById('f-type').value=f.type;
+  document.getElementById('f-required').value=f.required;
+  document.getElementById('f-section').value=f.sec;
+  document.getElementById('f-options').value=f.options||'';
+  document.getElementById('f-pdf').value=f.pdf||'';
+  document.getElementById('f-trigger-field').value=f.trigger_field||'';
+  document.getElementById('f-trigger-value').value=f.trigger_val||'';
+  document.getElementById('f-notes').value=f.notes||'';
+  document.getElementById('f-loop-fields').value=f.loop_fields||'';
+  typeChanged();
+  openModal('modal-edit');
+}
+function typeChanged(){
+  const t=document.getElementById('f-type').value;
+  document.getElementById('f-options-row').style.display=
+    (t==='select'||t==='multi_select')?'block':'none';
+  document.getElementById('f-loop-row').style.display=
+    (t==='loop')?'block':'none';
+}
+function saveField(){
+  const fid = document.getElementById('f-id').value.trim();
+  // ① Unique ID check
+  const duplicate = schema.some((f,i)=> f.id===fid && i!==editIdx);
+  if(duplicate){ alert(`Field ID "${fid}" already exists. Each field ID must be unique.`); return; }
+
+  const f={
+    id:fid,
+    ref:document.getElementById('f-ref').value.trim(),
+    sec:+document.getElementById('f-section').value,
+    label:document.getElementById('f-label').value.trim(),
+    type:document.getElementById('f-type').value,
+    options:document.getElementById('f-options').value.trim(),
+    loop_fields:document.getElementById('f-loop-fields').value.trim(),
+    pdf:document.getElementById('f-pdf').value.trim(),
+    trigger_field:document.getElementById('f-trigger-field').value.trim(),
+    trigger_val:document.getElementById('f-trigger-value').value.trim(),
+    required:document.getElementById('f-required').value,
+    notes:document.getElementById('f-notes').value.trim(),
+    // ② Preserve order; new fields go to end
+    order: editIdx!==null ? schema[editIdx].order : (Math.max(0,...schema.map(f=>f.order))+1),
+  };
+  if(!f.id||!f.label){alert('Field ID and Label are required.');return;}
+  if(editIdx!==null) schema[editIdx]=f;
+  else schema.push(f);
+  closeModal('modal-edit');
+  renderAll();
+}
+function deleteField(i){
+  if(!confirm(`Delete "${schema[i].label}"?`)) return;
+  schema.splice(i,1);
+  reindexOrders();
+  renderAll();
+}
+
+// ════════════════════════════════════
+// ORDER MANAGEMENT
+// ════════════════════════════════════
+function reindexOrders(){
+  // Re-stamp sequential order values after a move/delete
+  schema.sort((a,b)=>a.order-b.order).forEach((f,i)=>f.order=i+1);
+}
+function moveRow(i, dir){
+  const cur = schema[i];
+  const target = schema.find(f=>f.order===cur.order+dir);
+  if(!target) return;
+  const tmp = cur.order;
+  cur.order = target.order;
+  target.order = tmp;
+  renderAll();
+}
+function sortByOrder(){
+  schema.sort((a,b)=>a.order-b.order);
+  renderAll();
+}
+
+// ════════════════════════════════════
+// EXPORT
+// ════════════════════════════════════
+function buildJSON(){
+  return JSON.stringify({
+    schema_version:"1.1",
+    carrier:"Sun Life",
+    form:"ARMFS 2026",
+    generated:new Date().toISOString().split('T')[0],
+    sections: Object.entries(SECTIONS).map(([id,sec])=>({
+      id:+id, name:sec.name,
+      fields: schema
+        .filter(f=>f.sec==id)
+        .sort((a,b)=>a.order-b.order)
+        .map(f=>({
+          ...f,
+          loop_fields: f.type==='loop' && f.loop_fields
+            ? f.loop_fields.split('\n').map(line=>{
+                const parts=line.split('·').map(s=>s.trim());
+                return {field_id:parts[0]||'',type:parts[1]||'text',label:parts[2]||''};
+              })
+            : undefined
+        }))
+    }))
+  },null,2);
+}
+
+function buildCSV(){
+  const cols=['order','field_id','sl_field_ref','section','label','type','options',
+              'loop_fields','pdf_field_name','trigger_field','trigger_value','required','notes'];
+  const rows=schema
+    .sort((a,b)=>a.order-b.order)
+    .map(f=>[
+      f.order,f.id,f.ref,f.sec,f.label,f.type,f.options,
+      f.loop_fields,f.pdf,f.trigger_field,f.trigger_val,f.required,f.notes
+    ].map(v=>'"'+(String(v||'').replace(/"/g,'""'))+'"').join(','));
+  return [cols.join(','),...rows].join('\n');
+}
+
+function buildPrompt(){
+  return `You are extracting insurance intake data from a meeting transcript and/or handwritten notes.
+
+CARRIER: Sun Life
+FORM: ARMFS 2026
+DATE: ${new Date().toLocaleDateString('en-CA')}
+
+OUTPUT RULES:
+1. Return ONLY a valid JSON object — no preamble, no markdown, no explanation.
+2. Use the exact field_id keys listed in the schema below.
+3. If a field is not mentioned in the transcript, omit it entirely (do not include nulls).
+4. For yes_no fields use "Yes" or "No" exactly.
+5. For select fields use one of the listed options exactly.
+6. For dates, format as dd-mm-yyyy.
+7. For conditional fields, only include them if their trigger condition is met.
+8. If something is ambiguous, include it with a note appended in parentheses e.g. "Yes (unclear from transcript)".
+
+SCHEMA:
+${JSON.stringify(schema.map(f=>({
+  field_id:f.id,
+  label:f.label,
+  type:f.type,
+  options:f.options||undefined,
+  trigger:f.trigger_field?`Show only if ${f.trigger_field} = ${f.trigger_val}`:undefined,
+  required:f.required,
+  notes:f.notes||undefined
+})).filter(f=>f),null,2)}
+
+TRANSCRIPT / NOTES:
+[PASTE YOUR TRANSCRIPT OR NOTES HERE]`;
+}
+
+function buildAppsScript(){
+  return `// Google Apps Script — Paste into Extensions > Apps Script in your Sheet
+// Creates a JSON export button in the menu
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('ARMFS Schema')
+    .addItem('Export as JSON', 'exportJSON')
+    .addItem('Validate Schema', 'validateSchema')
+    .addToUi();
+}
+
+function exportJSON() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('Schema') || ss.getActiveSheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const rows = data.slice(1).filter(r => r[0]);
+
+  const sections = {};
+  rows.forEach(row => {
+    const field = {};
+    headers.forEach((h, i) => { field[h] = row[i]; });
+    const sec = field['section'];
+    if (!sections[sec]) sections[sec] = [];
+    sections[sec].push(field);
+  });
+
+  const output = {
+    schema_version: "1.0",
+    carrier: "Sun Life",
+    form: "ARMFS 2026",
+    generated: new Date().toISOString().split('T')[0],
+    sections: Object.entries(sections).map(([id, fields]) => ({
+      id: parseInt(id),
+      fields: fields
+    }))
+  };
+
+  const json = JSON.stringify(output, null, 2);
+  const ui = SpreadsheetApp.getUi();
+  
+  // Write to a new sheet
+  let outSheet = ss.getSheetByName('JSON Output');
+  if (!outSheet) outSheet = ss.insertSheet('JSON Output');
+  outSheet.clearContents();
+  outSheet.getRange(1,1).setValue(json);
+  
+  ui.alert('JSON exported to "JSON Output" sheet!');
+}
+
+function validateSchema() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('Schema') || ss.getActiveSheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const rows = data.slice(1).filter(r => r[0]);
+  
+  let issues = [];
+  const ids = rows.map(r => r[headers.indexOf('field_id')]);
+  
+  rows.forEach((row, i) => {
+    const field_id = row[headers.indexOf('field_id')];
+    const trigger = row[headers.indexOf('trigger_field')];
+    if (trigger && !ids.includes(trigger)) {
+      issues.push(\`Row \${i+2}: trigger_field "\${trigger}" not found\`);
+    }
+    if (!row[headers.indexOf('pdf_field_name')]) {
+      issues.push(\`Row \${i+2}: "\${field_id}" has no PDF field name\`);
+    }
+  });
+  
+  const msg = issues.length 
+    ? \`Found \${issues.length} issues:\\n\${issues.slice(0,10).join('\\n')}\`
+    : 'Schema is valid! All triggers and PDF fields are mapped.';
+  SpreadsheetApp.getUi().alert(msg);
+}`;
+}
+
+let currentExportData = '';
+let currentExportExt = 'json';
+
+function openExport(mode){
+  exportMode = mode;
+  switchExportTab(mode==='csv'?'csv':'json', null);
+  openModal('modal-export');
+}
+
+function switchExportTab(tab, el){
+  exportTab = tab;
+  document.querySelectorAll('.export-tab').forEach(t=>t.classList.remove('active'));
+  if(el) el.classList.add('active');
+  else document.querySelectorAll('.export-tab').forEach(t=>{
+    if(t.textContent.toLowerCase().includes(tab)) t.classList.add('active');
+  });
+
+  let content='', ext=tab;
+  if(tab==='json'){content=buildJSON();ext='json';}
+  else if(tab==='csv'){content=buildCSV();ext='csv';}
+  else if(tab==='prompt'){content=buildPrompt();ext='txt';}
+  else if(tab==='apps'){content=buildAppsScript();ext='gs';}
+
+  currentExportData=content;
+  currentExportExt=ext;
+  document.getElementById('export-code').textContent=content;
+  document.getElementById('btn-download').textContent=`⬇ Download .${ext}`;
+}
+
+function copyExport(){
+  navigator.clipboard.writeText(currentExportData)
+    .then(()=>alert('Copied to clipboard!'))
+    .catch(()=>{
+      const ta=document.createElement('textarea');
+      ta.value=currentExportData; document.body.appendChild(ta);
+      ta.select(); document.execCommand('copy'); ta.remove();
+      alert('Copied!');
+    });
+}
+
+function downloadExport(){
+  const mime = currentExportExt==='json'?'application/json':
+               currentExportExt==='csv'?'text/csv':'text/plain';
+  const blob=new Blob([currentExportData],{type:mime});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`armfs_schema_2026.${currentExportExt}`;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+// ════════════════════════════════════
+// MODAL HELPERS
+// ════════════════════════════════════
+function openModal(id){document.getElementById(id).classList.add('open')}
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+document.querySelectorAll('.modal-bg').forEach(m=>{
+  m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')});
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape') document.querySelectorAll('.modal-bg.open')
+    .forEach(m=>m.classList.remove('open'));
+});
+
+// ════════════════════════════════════
+// PDF FIELD MAP — extracted from 810-2799.pdf XFA template
+// ════════════════════════════════════
+const PDF_MAP = {
+  "2.1_first_name": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_insured_2.1.sub_table.sub_insured1.txtf_first_name",
+  "2.1_middle_initial": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_insured_2.1.sub_table.sub_insured1.txtf_middle",
+  "2.1_last_name": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_insured_2.1.sub_table.sub_insured1.txtf_last_name",
+  "2.1_former_last_name": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_insured_2.1.sub_table.sub_insured1.txtf_former_last_name",
+  "2.1_relationship_to_owner": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_insured_2.1.sub_table.sub_insured1.txtf_relationship",
+  "2.1_dob": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_insured_2.1.sub_table.sub_insured1.txtf_DOB",
+  "2.1_sin": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_insured_2.1.sub_table.sub_insured1.txtf_SIN",
+  "2.1_phone_home": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_insured_2.1.sub_table.sub_insured1.txtf_home_phone",
+  "2.1_phone_cell": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_insured_2.1.sub_table.sub_insured1.txtf_cell_phone",
+  "2.1_phone_work": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_insured_2.1.sub_table.sub_insured1.txtf_work_phone",
+  "2.1_address_street": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_insured_2.1.sub_table.sub_insured1.txtf_address_street",
+  "2.1_address_apt": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_insured_2.1.sub_table.sub_insured1.txtf_address_apt",
+  "2.1_address_city": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_insured_2.1.sub_table.sub_insured1.txtf_address_city",
+  "2.1_address_province": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_insured_2.1.sub_table.sub_insured1.txtf_province",
+  "2.1_address_postal": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_insured_2.1.sub_table.sub_insured1.txtf_postal_code",
+  "2.1_address_country": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_insured_2.1.sub_table.sub_insured1.txtf_country",
+  "2.2_birth_country": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_place_of_birth_2.2.txtf_country",
+  "2.2_birth_city": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_place_of_birth_2.2.txtf_city",
+  "2.3_citizenship": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_citizenship_status_2.3.sub_insurance_type_options.chk_canadian",
+  "2.4_arrival_date": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_lived_in_CAN_2.4.txtf_DOB",
+  "2.5_applied_pr": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_if_not_canadian_2.5.sub_options.sub_a.chk_applied",
+  "2.5_has_visa": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_if_not_canadian_2.5.sub_options.sub_b.chk_yes",
+  "2.5_visa_type": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_if_not_canadian_2.5.sub_options.sub_a.sub_explain.txtf_details",
+  "2.6_us_person": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_US_citizen_2.6.sub_options.chk_yes",
+  "2.6_us_tin": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_US_citizen_2.6.sub_options.txtf_TIN",
+  "2.7_other_tax_resident": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_other_jurisdiction_2.7.sub_options.chk_yes",
+  "2.7_crs_jurisdiction": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_other_jurisdiction_2.7.sub_options.sub_TIN.txtf_tax_residence",
+  "2.7_crs_tin": "form1.main.sub_application.sub_people_to_be_insured.sub_body.sub_insured1.sub_question_other_jurisdiction_2.7.sub_options.sub_TIN.txtf_TIN",
+  "3c_entity_name": "form1.main.sub_application.sub_owner_information.sub_body.sub_owner1.sub_question_owner_3.1.sub_corporation.sub_table.txtf_name",
+  "3c_entity_contact_title": "form1.main.sub_application.sub_owner_information.sub_body.sub_owner1.sub_question_owner_3.1.sub_corporation.sub_table.txtf_title",
+  "3c_entity_street": "form1.main.sub_application.sub_owner_information.sub_body.sub_owner1.sub_question_owner_3.1.sub_corporation.sub_table.txtf_address_street",
+  "3c_entity_city": "form1.main.sub_application.sub_owner_information.sub_body.sub_owner1.sub_question_owner_3.1.sub_corporation.sub_table.txtf_address_city",
+  "3c_entity_province": "form1.main.sub_application.sub_owner_information.sub_body.sub_owner1.sub_question_owner_3.1.sub_corporation.sub_table.txtf_province",
+  "3c_entity_postal": "form1.main.sub_application.sub_owner_information.sub_body.sub_owner1.sub_question_owner_3.1.sub_corporation.sub_table.txtf_postal_code",
+  "3c_entity_country": "form1.main.sub_application.sub_owner_information.sub_body.sub_owner1.sub_question_owner_3.1.sub_corporation.sub_table.txtf_country",
+  "8.2a_employment_status": "form1.main.sub_application.sub_insurance_employment_and_financial_questions.sub_body.sub_employment_info_8.2.sub_status.sub_table.sub_insured1.chk_employed",
+  "8.2b_occupation": "form1.main.sub_application.sub_insurance_employment_and_financial_questions.sub_body.sub_employment_info_8.2.sub_employed.sub_table.sub_insured1.txtf_details1",
+  "8.2b_employer_name": "form1.main.sub_application.sub_insurance_employment_and_financial_questions.sub_body.sub_employment_info_8.2.sub_employed.sub_table.sub_insured1.txtf_employer_details1",
+  "9.1_tobacco_last_used": "form1.main.sub_application.sub_lifestyle_questions.sub_body.sub_question_smoking_tobacco_use_9.1.sub_question_for_age_16_up.sub_table.sub_insured1.sub_this_week.chk_yes",
+  "9.1_tobacco_product": "form1.main.sub_application.sub_lifestyle_questions.sub_body.sub_question_smoking_tobacco_use_9.1.sub_question_for_age_16_up.sub_table.sub_insured1.sub_this_week.chk_cigarettes",
+  "10.1_doctor_type": "form1.main.sub_application.sub_medical_questions.sub_body.sub_question_physician_10.1.sub_insured1.sub_health_care_professional.sub_options.chk_family_doctor",
+  "10.2_height": "form1.main.sub_application.sub_medical_questions.sub_body.sub_question_height_weight_10.2.sub_question_current_height_weight.sub_table.sub_insured1.sub_height.txtf_cm",
+  "10.2_weight": "form1.main.sub_application.sub_medical_questions.sub_body.sub_question_height_weight_10.2.sub_question_current_height_weight.sub_table.sub_insured1.sub_weight.txtf_kg",
+  "10.4f_pregnant": "form1.main.sub_application.sub_medical_questions.sub_body.sub_question_medical_tests_consultations_10.4.sub_question_pregnant.sub_options.sub_who.sub_y_n1.chk_yes",
+  "11.1_early_onset_records": "form1.main.sub_application.sub_family_medical_history.sub_body.sub_question_details_about_family_medical_history_11.3.sub_table.sub_row1.txtf_condition",
+  "11.2_hereditary_records": "form1.main.sub_application.sub_family_medical_history.sub_body.sub_question_details_about_family_medical_history_11.3.sub_table.sub_row3.txtf_condition"
+};
+schema = schema.map((f,i)=>({...f, order:i+1, loop_fields:f.loop_fields||'', pdf:f.pdf||PDF_MAP[f.id]||''}));
+renderAll();
+</script>
+</body>
+</html>
